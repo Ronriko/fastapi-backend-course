@@ -1,0 +1,36 @@
+name: Ruff Quality & Format Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Check formatting with Ruff
+        run: ruff format --check .
+
+      - name: Lint code with Ruff
+        run: ruff check .
