@@ -1,57 +1,52 @@
-import json
+import os
+import requests
 from fastapi import FastAPI
 from pydantic import BaseModel
+from dotenv import load_dotenv
+from typing import Optional
 
-class Task(BaseModel):
-    id: int
-    title:str
-    status: str
+load_dotenv()
 
-class TaskFileStorage:
-    def __init__(self, filepath: str):
-        self.filepath = filepath
-    
-    def read(self):
-        with open(self.filepath, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return [Task(**item) for item in data]
-    
-    def write(self, tasks):
-        with open(self.filepath, "w", encoding="utf-8") as f:
-            json.dump([task.model_dump() for task in tasks], f, indent=2)
+BASE_URL = os.getenv("MOCKAPI_BASE_URL") + "/tasks"
 
 app = FastAPI()
-storage = TaskFileStorage("tasks.json")
 
-@app.get("/tasks")
+
+class Task(BaseModel):
+    id: Optional[str] = None
+    title: str
+    status: str
+
+
+@app.get("/tasks", response_model=list[Task])
 def get_tasks():
-    return storage.read()
+    response = requests.get(BASE_URL)
+    response.raise_for_status()
+    return response.json()
 
-@app.post("/tasks")
+
+@app.post("/tasks", response_model=Task)
 def create_task(task: Task):
-    tasks = storage.read()
-    tasks.append(task)
-    storage.write(tasks)
-    return task
+    response = requests.post(BASE_URL, json=task.model_dump())
+    response.raise_for_status()
+    return response.json()
 
-@app.put("/tasks/{task_id}")
-def update_task(task_id: int, update_task: Task):
-    tasks = storage.read()
-    for i, task in enumerate(tasks):
-        if task.id == task_id:
-            tasks[i] = update_task
-            storage.write(tasks)
-            return update_task
-    return {"error": "Task not found"}
-        
+
+@app.put("/tasks/{task_id}", response_model=Task)
+def update_task(task_id: str, update_task: Task):
+    url = f"{BASE_URL}/{task_id}"
+    response = requests.put(url, json=update_task.model_dump())
+    if response.status_code == 404:
+        return {"error": "Task not found"}
+    response.raise_for_status
+    return response.json()
+
 
 @app.delete("/tasks/{task_id}")
-def delete_task(task_id: int):
-    tasks = storage.read()
-    for i, task in enumerate(tasks):
-        if task.id == task_id:
-            tasks.pop(i)
-            storage.write(tasks)
-            return {"message": "Task deleted"}
-    return {"error": "Task not found"}
-
+def delete_task(task_id: str):
+    url = f"{BASE_URL}/{task_id}"
+    response = requests.delete(url)
+    if response.status_code == 404:
+        return {"error": "Task not found"}
+    response.raise_for_status
+    return {"message": "Task deleted"}
