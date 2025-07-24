@@ -1,15 +1,24 @@
 import os
-import requests
 from fastapi import APIRouter
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from base import BaseHTTPClient
 from llm import LLMClient
+import requests
 
 load_dotenv()
 
 BASE_URL = os.getenv("MOCKAPI_BASE_URL") + "/tasks"
 llm = LLMClient()
 router = APIRouter()
+
+
+class TasksClient(BaseHTTPClient):
+    def parse(self, response: requests.Response):
+        return response.json()
+
+
+tasks_api = TasksClient(BASE_URL)
 
 
 class Task(BaseModel):
@@ -28,38 +37,26 @@ class MessageResponse(BaseModel):
 
 @router.get("/tasks", response_model=TaskListResponse)
 def get_tasks():
-    response = requests.get(BASE_URL)
-    response.raise_for_status()
-    tasks = response.json()
-    return TaskListResponse(tasks)
+    return TaskListResponse(tasks=tasks_api.request("get", ""))
 
 
 @router.post("/tasks", response_model=Task)
 def create_task(task: Task):
     solution = llm.generate_solution(task.title)
     task.title += f"Решение от ИИ: \n{solution}"
-    response = requests.post(
-        BASE_URL, json=task.model_dump(exclude={"id"}, exclude_unset=True)
+    return tasks_api.request(
+        "post", "", json=task.model_dump(exclude={"id"}, exclude_unset=True)
     )
-    response.raise_for_status()
-    tasks = response.json()
-    return tasks
 
 
 @router.put("/tasks/{task_id}", response_model=Task)
 def update_task(task_id: str, update_task: Task):
-    url = f"{BASE_URL}/{task_id}"
-    response = requests.put(
-        url, json=update_task.model_dump(exclude={"id"}, exclude_unset=True)
+    return tasks_api.request(
+        "put", task_id, json=update_task.model_dump(exclude={"id"}, exclude_unset=True)
     )
-    response.raise_for_status
-    tasks = response.json()
-    return tasks
 
 
 @router.delete("/tasks/{task_id}", response_model=MessageResponse)
 def delete_task(task_id: str):
-    url = f"{BASE_URL}/{task_id}"
-    response = requests.delete(url)
-    response.raise_for_status
-    return {"message": "Task deleted"}
+    tasks_api.request("delete", task_id)
+    return MessageResponse(message="Task deleted")
